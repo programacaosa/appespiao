@@ -1,48 +1,40 @@
 const express = require('express');
-const socketio = require('socket.io');
 const http = require('http');
+const socketIo = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketio(server);
+const io = socketIo(server);
 
-const PORT = 3000;
-
-// Servir arquivos da raiz
-app.use(express.static(__dirname));
-
-// Rota do dispositivo
+// Serve os arquivos HTML
 app.get('/', (req, res) => {
     res.sendFile(__dirname + '/index.html');
 });
 
-// Rota do painel
 app.get('/painel', (req, res) => {
     res.sendFile(__dirname + '/painel.html');
 });
 
-// Conexões socket
+// Gerencia conexões Socket.io
 io.on('connection', (socket) => {
-    console.log(`Cliente conectado: ${socket.id}`);
+    console.log('Novo cliente conectado:', socket.id);
 
-    // Painel envia comando
+    // Painel -> Dispositivo (comandos)
     socket.on('comando', (cmd) => {
-        console.log('Comando recebido:', cmd);
-        io.emit('executar_comando', cmd);
+        io.emit('executar_comando', cmd); // Broadcast para todos os dispositivos
     });
 
-    // Dispositivo envia vídeo para o painel
-    socket.on('video_gravado', (videoBase64) => {
-        console.log('Vídeo recebido do dispositivo.');
-        io.emit('video_recebido', videoBase64);
+    // Dispositivo -> Painel (frames da câmera)
+    socket.on('frame_ao_vivo', (frame) => {
+        io.emit('frame_ao_vivo', frame); // Envia para todos os painéis
     });
 
     socket.on('disconnect', () => {
-        console.log(`Cliente desconectado: ${socket.id}`);
+        console.log('Cliente desconectado:', socket.id);
     });
 });
 
+const PORT = 3000;
 server.listen(PORT, () => {
-    console.log(`Servidor rodando: http://localhost:${PORT}`);
-    console.log(`Painel: http://localhost:${PORT}/painel`);
+    console.log(`Servidor rodando em http://localhost:${PORT}`);
 });
