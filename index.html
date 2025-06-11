@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Dispositivo</title>
+</head>
+<body>
+    <h2>Dispositivo</h2>
+    <video id="video" autoplay muted style="width: 320px; border: 1px solid #ccc;"></video>
+    <p id="status"></p>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const video = document.getElementById('video');
+        const status = document.getElementById('status');
+
+        let stream = null;
+        let mediaRecorder = null;
+        let gravaçãoChunks = [];
+
+        socket.on('executar_comando', async (cmd) => {
+            if (cmd === 'ativar_camera') {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                video.srcObject = stream;
+                status.textContent = 'Câmera ativada';
+            }
+
+            if (cmd === 'desativar_camera') {
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                    video.srcObject = null;
+                    stream = null;
+                }
+                status.textContent = 'Câmera desativada';
+            }
+
+            if (cmd === 'gravar_video') {
+                if (!stream) {
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    video.srcObject = stream;
+                }
+
+                gravaçãoChunks = [];
+                mediaRecorder = new MediaRecorder(stream);
+
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) gravaçãoChunks.push(e.data);
+                };
+
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(gravaçãoChunks, { type: 'video/webm' });
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        socket.emit('video_gravado', reader.result);
+                        status.textContent = 'Vídeo enviado ao painel';
+                    };
+                    reader.readAsDataURL(blob);
+                };
+
+                mediaRecorder.start();
+                status.textContent = 'Gravando por 10 segundos...';
+
+                setTimeout(() => {
+                    if (mediaRecorder && mediaRecorder.state === 'recording') {
+                        mediaRecorder.stop();
+                    }
+                }, 10000);
+            }
+        });
+    </script>
+</body>
+</html>

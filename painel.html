@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Painel de Controle</title>
+</head>
+<body>
+    <h2>Painel de Controle</h2>
+
+    <button onclick="enviarComando('ativar_camera')">Ativar Câmera</button>
+    <button onclick="enviarComando('desativar_camera')">Desativar Câmera</button>
+    <button onclick="enviarComando('gravar_video')">Gravar Vídeo</button>
+
+    <h3>Vídeo Recebido:</h3>
+    <div id="videoContainer"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+
+        function enviarComando(cmd) {
+            socket.emit('comando', cmd);
+        }
+
+        socket.on('video_recebido', (videoBase64) => {
+            const container = document.getElementById('videoContainer');
+            container.innerHTML = ''; // limpa antes
+
+            const video = document.createElement('video');
+            video.src = videoBase64;
+            video.controls = true;
+            video.style.width = '320px';
+
+            const link = document.createElement('a');
+            link.href = videoBase64;
+            link.download = 'gravacao.webm';
+            link.textContent = '📥 Baixar Vídeo';
+            link.style.display = 'block';
+            link.style.marginTop = '10px';
+
+            container.appendChild(video);
+            container.appendChild(link);
+        });
+    </script>
+</body>
+</html>
